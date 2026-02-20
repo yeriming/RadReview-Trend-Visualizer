@@ -1,52 +1,70 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import datetime
 
-# 1. 데이터 로드 (파일 경로가 PR.py와 같은 폴더에 있어야 합니다)
+# 1. 데이터 로드 및 중복 제거 (데이터 정제)
 file_path = 'Pediatric radiology.csv'
 df = pd.read_csv(file_path)
 
-# 2. 관련 키워드 설정 (주제 밀접도 판단용)
-# 소아 MRI 준비, 진정제, 환자 경험 등과 관련된 키워드들입니다.
+df = df.drop_duplicates(subset=['PMID'], keep='first')
+df = df.drop_duplicates(subset=['Title'], keep='first')
+
+# 2. 분석 지표 설정
+# 주제 관련 키워드 (Topic)
 target_keywords = ['preparation', 'prepare', 'mock', 'simulation', 'virtual', 'vr',
                    'robot', 'sedation', 'anesthesia', 'anxiety', 'distress', 'child life']
 
-def check_relevance(title):
+def classify_paper(title):
     title_lower = str(title).lower()
-    return any(k in title_lower for k in target_keywords)
+    is_topic_related = any(k in title_lower for k in target_keywords)
+    is_scoping_method = 'scoping' in title_lower
+    # 주제와 방법론의 교집합 (Intersection)
+    is_intersection = is_topic_related and is_scoping_method
+    return pd.Series([is_topic_related, is_scoping_method, is_intersection])
 
-# 관련 논문 여부 컬럼 추가
-df['is_relevant'] = df['Title'].apply(check_relevance)
+df[['Topic_Related', 'Scoping_Method', 'Intersection']] = df['Title'].apply(classify_paper)
 
-# 3. 연도별 통계 계산
-# 연도별 전체 논문 수와 관련 논문 수를 집계합니다.
-yearly_stats = df.groupby('Publication Year').agg(
-    Total_Reviews=('Title', 'count'),
-    Relevant_Reviews=('is_relevant', 'sum')
+# 3. 연도별 통계 집계
+stats = df.groupby('Publication Year').agg(
+    Total=('Title', 'count'),
+    Topic=('Topic_Related', 'sum'),
+    Methodology=('Scoping_Method', 'sum'),
+    Intersection=('Intersection', 'sum')
 ).reset_index()
 
-# 4. 시각화 (Seaborn/Matplotlib 활용)
-plt.figure(figsize=(12, 6))
+# 4. 시각화 (레이어링을 통한 분포 파악)
+plt.figure(figsize=(15, 8))
 sns.set_style("whitegrid")
 
-# 전체 리뷰 논문 추이 (연한 색)
-sns.barplot(data=yearly_stats, x='Publication Year', y='Total_Reviews',
-            color='lightgray', label='Total Review Papers')
+# 레이어 1: 저널 전체 리뷰 수
+sns.barplot(data=stats, x='Publication Year', y='Total', color='#E0E0E0', label='Total Reviews')
 
-# 주제 관련 리뷰 논문 추이 (진한 색)
-sns.barplot(data=yearly_stats, x='Publication Year', y='Relevant_Reviews',
-            color='royalblue', label='Prep/Sedation Related Reviews')
+# 레이어 2: 특정 주제 관련 리뷰 (Topic Distribution)
+sns.barplot(data=stats, x='Publication Year', y='Topic', color='#A2C2E1', label='Topic-Related Reviews')
 
-plt.title('Trend of Review Papers in Pediatric Radiology (1977-2024)', fontsize=15)
-plt.xlabel('Publication Year', fontsize=12)
-plt.ylabel('Number of Papers', fontsize=12)
-plt.xticks(rotation=45) # 연도가 겹치지 않게 회전
-plt.legend()
+# 레이어 3: 스코핑 리뷰 방법론 채택 수 (Methodological Distribution)
+sns.barplot(data=stats, x='Publication Year', y='Methodology', color='#FFD54F', label='Scoping Methodology')
 
+# 레이어 4: 두 요소의 교집합 (Intersection of Topic and Methodology)
+sns.barplot(data=stats, x='Publication Year', y='Intersection', color='#D32F2F', label='Intersection')
+
+plt.title('Statistical Distribution of Review Papers in Pediatric Radiology (1977-2024)', fontsize=16)
+plt.xticks(rotation=45)
+plt.legend(loc='upper left')
 plt.tight_layout()
+
+# 5. 자동 저장 (파일 이름에 일시 포함)
+timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+save_name = f"journal_trend_analysis_{timestamp}.png"
+plt.savefig(save_name, dpi=300)
+print(f"분석 결과 이미지가 저장되었습니다: {save_name}")
+
 plt.show()
 
-# 5. 간단한 분석 결과 출력
-latest_years = yearly_stats.tail(10)
-print("--- 최근 10년 트렌드 요약 ---")
-print(latest_years)
+# 6. 통계 요약 출력
+print(f"\n[데이터 통계 요약]")
+print(f"- 분석 대상 총 논문 수: {len(df)}건")
+print(f"- 주제 관련 리뷰: {df['Topic_Related'].sum()}건")
+print(f"- 스코핑 방법론 리뷰: {df['Scoping_Method'].sum()}건")
+print(f"- 주제-방법론 교집합: {df['Intersection'].sum()}건")
