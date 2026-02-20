@@ -6,7 +6,7 @@ import datetime
 # ==========================================
 # 1. 설정 (Pediatric Radiology 전용)
 # ==========================================
-JOURNAL_NAME = 'Pediatric Radiology'
+JOURNAL_NAME = 'Patient Education and Counseling'
 FILE_PATH = f'{JOURNAL_NAME}.csv'
 
 # ==========================================
